@@ -20,11 +20,12 @@
 
 import pandas as pd
 import numpy as np
-import pystan
+import stan as pystan
 import os
 import pickle
 import arviz
 import matplotlib.pyplot as plt
+from cmdstanpy import CmdStanModel
 
 from shutil import move
 
@@ -95,11 +96,10 @@ def read_fitres(fname_zenodo_meta: str,
     
     # read plasticc test metadata
     test_metadata = pd.read_csv(fname_test_zenodo_meta)
+    print(test_metadata.shape)
 
     # read sample 
     fitres_main = pd.read_csv(fname_sample, index_col=False)
-    if ' ' in fitres_main.keys()[0]:
-        fitres_main = pd.read_csv(fname_sample, delim_whitespace=True)
 
     # read lowz sample
     if lowz:
@@ -215,8 +215,9 @@ def remove_duplicated_z(fitres_final: pd.DataFrame):
 
 
 def fit_stan(fname_fitres_comb: str, dir_output: str, sample: str,
-             screen=False, lowz=True, bias=True, plot=False, om_pri=[0.3, 0.01],
-             w_pri=[-11, 9], warmup=10000, n_iter=12000):
+             dir_input_cosmo: str, screen=False, lowz=True, 
+             bias=True, plot=False, om_pri=[0.3, 0.01],
+             w_pri=[-11, 9], warmup=10000, n_iter=12000, n_chains=1):
     """
     Fit Stan model for w.
     
@@ -244,6 +245,8 @@ def fit_stan(fname_fitres_comb: str, dir_output: str, sample: str,
         Number of interations in warmup from pystan. Default is 10000.
     n_iter: int (optional)
         Total number of interations from pystan. Default is 12000.
+    n_chains: int (optional)
+        Number of chains. Default is 1.
     """
 
     # read data for Bayesian model
@@ -288,61 +291,41 @@ def fit_stan(fname_fitres_comb: str, dir_output: str, sample: str,
     stan_input_tofile = pd.DataFrame(stan_input2)
     stan_input_tofile.to_csv(fname_stan_input, index=False)
 
-    # fit Bayesian model
-    model = pystan.StanModel(file = dir_input + '/cosmo.stan')
-    fit = model.sampling(data=stan_input, iter=n_iter, chains=5, 
-                         warmup=warmup, control={'adapt_delta':0.99})
-
-    # get summary
-    res = fit.stansummary(pars=["om", "w"])
-    check = str(pystan.check_hmc_diagnostics(fit))
-
-    if screen:
-        print(res)
-        print( ' ******* ')
-        print(check)
+    # fit Bayesian model           
+    model = CmdStanModel(stan_file=dir_input_cosmo + 'cosmo.stan', 
+                         cpp_options={'STAN_THREADS':'true'})
+    fit = model.sample(data=stan_input, iter_sampling=n_iter, chains=n_chains,
+                      iter_warmup=warmup)
+    
+    # get posterior
+    chains = pd.DataFrame()
+    for par in ['om', 'w', 'M']:
+        chains[par] = fit.stan_variables()[par]
+        
+    chains_final = chains.sample(n=n_chains * (n_iter - warmup), replace=False)
 
     if lowz and bias:
-        summ_fname = dir_output + 'stan_summary/stan_summary_' + sample + '_lowz_withbias.dat'
         chains_fname = dir_output + 'posteriors/pkl/chains_' + sample + '_lowz_withbias.pkl'
         trace_fname = dir_output + 'posteriors/trace/trace_plot_' + sample + '_lowz_withbias.png'
     elif lowz and not bias:
-        summ_fname = dir_output + 'stan_summary/stan_summary_' + sample + '_lowz_nobias.dat'
         chains_fname = dir_output + 'posteriors/pkl/chains_' + sample + '_lowz_nobias.pkl'
         trace_fname = dir_output + 'posteriors/trace/trace_plot_' + sample + '_lowz_nobias.png'
     else:
-        summ_fname = dir_output + 'stan_summary/stan_summary_' + sample + '.dat'
         chains_fname = dir_output + 'posteriors/pkl/chains_' + sample + '.pkl'
         trace_fname = dir_output + 'posteriors/trace/trace_plot_' + sample + '.png'
 
-    op2 = open(summ_fname, 'w')
-    op2.write(res)
-    op2.write('\n ************* \n')
-    op2.write(check)
-    op2.close()
-
-    samples = fit.extract(pars=['om', 'w'], permuted=True, inc_warmup=False)
-
-    pickle.dump(samples, open(chains_fname, "wb"))
-
-    pystan.check_hmc_diagnostics(fit)
-
-    ### plot chains
     if plot:
-        arviz.plot_trace(fit, ['om', 'w'])
+        chains_dict = dict(chains_final)
+        arviz.plot_trace(chains_dict, ['om', 'w'])
         plt.savefig(trace_fname)
-
+    
     if lowz and bias:
-        data = pd.read_pickle(chains_fname)
-        data2 = pd.DataFrame(data)
-        data2.to_csv(dir_output + 'posteriors/csv/' + \
-                     'chains_'  + sample + '_lowz_withbias.csv.gz', index=False)
-
-
-
-
+        chains_final.to_csv(dir_output + 'posteriors/csv/' + \
+                            'chains_'  + sample + '_lowz_withbias.csv', index=False)
+  
+     
 ##################    user choices     ##########################################
-fname_sample = 'DDF_perfect_validation_fitres.csv'    # choose sample
+fname_sample = 'RandomSampling_20_batchNone_1year'         # choose sample
 nbins = 30                                    # number of bins for SALT2mu
 om_pri = [0.3, 0.01]                          # gaussian prior on om => [mean, std]
 w_pri = [-11, 9]                              # flat prior on w
@@ -350,8 +333,9 @@ lowz = True                                   # choose to add lowz sample
 field = 'DDF'                                 # choose field
 biascorr = True
 screen = True
-n_iter = 12000
-warmup = 10000
+n_iter = 6000
+warmup = 5000
+n_chains = 5
 
 save_full_fitres = True
 plot_chains = True
@@ -361,6 +345,7 @@ output_root = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/' + field + '/cosmo_re
 
 # path to auxiliar input files from Malz et al., 2023
 dir_input = '/media/emille/git/COIN/COINtoolbox/RESSPECT_metric/utils/'
+dir_input_cosmo = '/media/emille/git/COIN/RESSPECT_repo/RESSPECT/auxiliary_files/'
 fname_input_salt2mu = dir_input + 'template_SALT2mu.input'
 fname_fitres_lowz = dir_input + 'lowz_only_fittres.fitres'
 
@@ -370,8 +355,8 @@ fname_test_zenodo_meta = '/media/RESSPECT/data/PLAsTiCC/PLAsTiCC_zenodo/plasticc
 # folder with resources for bias correction calculations
 biascorr_dir = '/media/RESSPECT/data/PLAsTiCC/biascorsims/'
 
-samples_dir = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/' + field + '/initial_samples/'
-fname_fitres_comb = output_root + 'fitres/test_salt2mu_lowz_withbias_' + fname_sample[:-11] + '.fitres'
+samples_dir = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/' + field + '/learn_loop_results/cosmo_samples/' 
+fname_fitres_comb = output_root + 'fitres/test_salt2mu_lowz_withbias_' + fname_sample + '.fitres'
 
 
 ###################################################################################
@@ -386,14 +371,14 @@ create_directories(dir_output=output_root)
 #######################
 ### Generate fitres ###
 #######################
-fname_output_salt2mu = dir_input + '/SALT2mu_' + fname_sample[:-11]  + '.input'
+fname_output_salt2mu = dir_input + '/SALT2mu_' + fname_sample  + '.input'
 
 read_fitres(fname_zenodo_meta=fname_test_zenodo_meta,
-            fname_sample=samples_dir + fname_sample,
+            fname_sample=samples_dir + fname_sample + '.csv',
             fname_fitres_lowz=fname_fitres_lowz,
             fname_output=fname_output_salt2mu,
             dir_output=output_root,
-            sample=fname_sample[:-11], 
+            sample=fname_sample, 
             lowz = lowz,
             to_file=save_full_fitres)
 
@@ -403,7 +388,7 @@ read_fitres(fname_zenodo_meta=fname_test_zenodo_meta,
 ####### SALT2mu #######
 #######################
 fit_salt2mu(biascorr_dir=biascorr_dir, 
-            sample=fname_sample[:-11], root_dir=output_root, 
+            sample=fname_sample, root_dir=output_root, 
             fname_input_salt2mu=fname_input_salt2mu, fname_output_salt2mu=fname_output_salt2mu, 
             nbins=nbins, field=field, biascorr=biascorr)
 
@@ -411,6 +396,8 @@ fit_salt2mu(biascorr_dir=biascorr_dir,
 ##### Stan model ######
 #######################
         
-fit_stan(fname_fitres_comb=fname_fitres_comb, dir_output=output_root, sample=fname_sample[:-11],
-         screen=screen, lowz=lowz, bias=biascorr, plot=plot_chains, om_pri=om_pri, w_pri=w_pri,
-         n_iter=n_iter, warmup=warmup)
+fit = fit_stan(fname_fitres_comb=fname_fitres_comb, dir_output=output_root, 
+               dir_input_cosmo=dir_input_cosmo, sample=fname_sample + '.csv',
+               screen=screen, lowz=lowz, bias=biascorr, 
+               plot=plot_chains, om_pri=om_pri, w_pri=w_pri,
+               n_iter=n_iter, warmup=warmup, n_chains=n_chains)

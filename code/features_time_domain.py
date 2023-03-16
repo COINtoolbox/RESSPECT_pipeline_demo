@@ -21,7 +21,7 @@ from resspect.lightcurves_utils import PLASTICC_TARGET_TYPES
 import time
 
 field = 'DDF'                           # DDF or WFD
-output_dir = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/' + field + '/features/pool/'
+output_dir = '/media/emille/git/COIN/COINtoolbox/RESSPECT_pipeline_paper/code/' #'/media/RESSPECT/data/PLAsTiCC/for_pipeline/' + field + '/features/pool/'
 raw_data_dir = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/' + field + '/initial_samples/'     # path to PLAsTiCC zenodo files
 photo_file = field + '_pool_lightcurves_01.csv'
 

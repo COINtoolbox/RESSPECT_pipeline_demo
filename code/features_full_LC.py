@@ -18,10 +18,10 @@
 
 from resspect import fit_plasticc_bazin
 
-orig_sample = 'train'
+orig_sample = 'test'
 
 
-output_sample = 'train'
+output_sample = 'pool'
 header_file = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/DDF/initial_samples/DDF_' + output_sample + '_metadata.csv'
 photo_file = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/DDF/initial_samples/DDF_' + output_sample + '_lightcurves_01.csv'
 
