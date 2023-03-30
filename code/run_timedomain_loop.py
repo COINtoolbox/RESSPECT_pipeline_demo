@@ -17,12 +17,13 @@
 
 
 from resspect import time_domain_loop
+import numpy as np
     
-days = [42, 407]
+days = [42, 1042]
 training = 20
 strategy = 'RandomSampling'
 n_estimators = 1000
-batch = None
+batch = 1
 
 sep_files = True
 save_full_query= False
@@ -36,7 +37,7 @@ output_query_file = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/DDF/learn_loop_r
 path_to_features_dir = '/media/RESSPECT/data/PLAsTiCC/for_pipeline/DDF/features/pool/'
   
 
-budgets = (2. * 3600, 1. * 3600)
+budgets = None #((2. * 3600, 1. * 3600), (2. * 3600, 1. * 3600))
 classifier = 'RandomForest'
 clf_bootstrap = False #True
 feature_method = 'Bazin'

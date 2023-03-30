@@ -325,7 +325,7 @@ def fit_stan(fname_fitres_comb: str, dir_output: str, sample: str,
   
      
 ##################    user choices     ##########################################
-fname_sample = 'RandomSampling_20_batchNone_1year'         # choose sample
+fname_sample = 'RandomSampling_20_batch1'         # choose sample
 nbins = 30                                    # number of bins for SALT2mu
 om_pri = [0.3, 0.01]                          # gaussian prior on om => [mean, std]
 w_pri = [-11, 9]                              # flat prior on w
@@ -397,7 +397,7 @@ fit_salt2mu(biascorr_dir=biascorr_dir,
 #######################
         
 fit = fit_stan(fname_fitres_comb=fname_fitres_comb, dir_output=output_root, 
-               dir_input_cosmo=dir_input_cosmo, sample=fname_sample + '.csv',
+               dir_input_cosmo=dir_input_cosmo, sample=fname_sample,
                screen=screen, lowz=lowz, bias=biascorr, 
                plot=plot_chains, om_pri=om_pri, w_pri=w_pri,
                n_iter=n_iter, warmup=warmup, n_chains=n_chains)
